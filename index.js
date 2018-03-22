@@ -43,57 +43,57 @@ const config = defaults({
  */
 const sw = Swarm(config);
 
-const init = async () => {
+const init = () => {
   // Choose a random unused port for listening TCP peer connections
-  const port = await getPort();
+  const port = getPort().then(port => {
+    sw.listen(port);
+    // console.log('[DEBUG] Listening to port: ' + port)
 
-  sw.listen(port);
-  // console.log('[DEBUG] Listening to port: ' + port)
+    /**
+     * The channel we are connecting to.
+     * Peers should discover other peers in this channel
+     */
+    sw.join("our-fun-channel");
 
-  /**
-   * The channel we are connecting to.
-   * Peers should discover other peers in this channel
-   */
-  sw.join("our-fun-channel");
+    sw.on("connection", (conn, info) => {
+      // Connection id
+      const seq = connSeq;
 
-  sw.on("connection", (conn, info) => {
-    // Connection id
-    const seq = connSeq;
+      const peerId = info.id.toString("hex");
+      // console.log(`[DEBUG] Connected #${seq} to peer: ${peerId}`)
 
-    const peerId = info.id.toString("hex");
-    // console.log(`[DEBUG] Connected #${seq} to peer: ${peerId}`)
-
-    // Keep alive TCP connection with peer
-    if (info.initiator) {
-      try {
-        conn.setKeepAlive(true, 600);
-      } catch (exception) {
-        console.error("exception", exception);
+      // Keep alive TCP connection with peer
+      if (info.initiator) {
+        try {
+          conn.setKeepAlive(true, 600);
+        } catch (exception) {
+          console.error("exception", exception);
+        }
       }
-    }
 
-    conn.on("data", data => {
-      // Here we handle incomming messages
-      // console.log('[DEBUG] Received Message from peer ' + peerId)
-      console.log(data.toString());
-    });
+      conn.on("data", data => {
+        // Here we handle incomming messages
+        // console.log('[DEBUG] Received Message from peer ' + peerId)
+        console.log(data.toString());
+      });
 
-    conn.on("close", () => {
-      // Here we handle peer disconnection
-      // console.log(`[DEBUG] Connection ${seq} closed, peer id: ${peerId}`)
-      // If the closing connection is the last connection with the peer, removes the peer
-      if (peers[peerId].seq === seq) {
-        delete peers[peerId];
+      conn.on("close", () => {
+        // Here we handle peer disconnection
+        // console.log(`[DEBUG] Connection ${seq} closed, peer id: ${peerId}`)
+        // If the closing connection is the last connection with the peer, removes the peer
+        if (peers[peerId].seq === seq) {
+          delete peers[peerId];
+        }
+      });
+
+      // Save the connection
+      if (!peers[peerId]) {
+        peers[peerId] = {};
       }
+      peers[peerId].conn = conn;
+      peers[peerId].seq = seq;
+      connSeq++;
     });
-
-    // Save the connection
-    if (!peers[peerId]) {
-      peers[peerId] = {};
-    }
-    peers[peerId].conn = conn;
-    peers[peerId].seq = seq;
-    connSeq++;
   });
 };
 
